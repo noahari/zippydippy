@@ -6,30 +6,49 @@
 #include <stdlib.h>
 #include <string.h>
 
-char *parse(char *in){
+int parse(char *in)
+{
     char run = in[0];
     int count = 0;
-    char *out = (char *) malloc(strlen(in) * sizeof(char));
-    for(int i = 0; i < strlen(in); i++){
+    for (int i = 0; i < strlen(in); i++)
+    {
         char cur = in[i];
-        printf("%c\n", cur);
         if (cur == run)
             count++;
-        else{
-            char runStr[sizeof(count) + 1];
-            snprintf(runStr, sizeof(count), "%x", count); // Add count to runStr
-            strcat(runStr, &run); // Add run char to runStr
-            strcat(out, runStr); // Add runStr to count
+        else
+        {
+            fwrite(&count, sizeof(count), 1, stdout);
+            fwrite(&run, sizeof(char), 1, stdout);
             run = cur;
-            count = 0;
+            count = 1;
         }
     }
-    return out;
+    fwrite(&count, sizeof(count), 1, stdout);
+    fwrite(&run, sizeof(char), 1, stdout);
+    return 0;
 }
 
-int main(int argc, char *argv[]) {
-    char *parsed = parse(argv[1]);
-    fwrite(parsed, sizeof(char), strlen(parsed), stdout);
-    free(parsed);
+int main(int argc, char *argv[])
+{
+    FILE *fp = fopen(argv[1], "r");
+    if(!fp)
+        return 1;
+    // How long is the file?
+    fseek(fp, 0, SEEK_END);
+    long length = ftell(fp);
+    fseek(fp, 0, SEEK_SET);
+
+    // Allocate memory for contents of file (what if it's bigger than memory??)
+    char *contents = (char*) malloc(length * sizeof(char));
+    if(!contents)
+        return 1;
+
+    // Read whole file
+    fread(contents, sizeof(char), length, fp);
+    fclose(fp);
+    // Parse file
+    parse(contents);
+    // Free memory
+    free(contents);
     return 0;
 }
