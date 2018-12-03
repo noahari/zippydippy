@@ -31,8 +31,10 @@ int parse(char *in)
 int main(int argc, char *argv[])
 {
     FILE *fp = fopen(argv[1], "r");
-    if(!fp)
+    if(!fp){
+        fclose(fp);
         return 1;
+    }
     // How long is the file?
     fseek(fp, 0, SEEK_END);
     long length = ftell(fp);
@@ -40,11 +42,17 @@ int main(int argc, char *argv[])
 
     // Allocate memory for contents of file (what if it's bigger than memory??)
     char *contents = (char*) malloc(length * sizeof(char));
-    if(!contents)
+    if(!contents){
+        fclose(fp);
         return 1;
+    }
 
     // Read whole file
-    fread(contents, sizeof(char), length, fp);
+    int done = fread(contents, sizeof(char), length, fp);
+    if(!done){
+        fclose(fp);
+        return 1;
+    }
     fclose(fp);
     // Parse file
     parse(contents);
