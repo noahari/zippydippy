@@ -1,6 +1,6 @@
 /*********************************************************
  * Your Name: Noah Ari 
- * Partner Name: Colby Morisson
+ * Partner Name: Colby Morrison
  *********************************************************/
 #include <stdio.h>
 #include <stdlib.h>
