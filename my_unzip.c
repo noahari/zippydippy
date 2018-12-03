@@ -22,11 +22,10 @@ int decode(char *in){
 	//otherwise it is the letter to print
         else{
 	   while(count > 0){
-	      printf("%d",cur);
+	      printf("%c",cur);
 	      count--;	      	   
 	   }
         } 
-	count = 0;
     }
    return 0;
 }
