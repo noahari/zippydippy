@@ -41,14 +41,14 @@ int main(int argc, char *argv[])
     fseek(fp, 0, SEEK_SET);
 
     // Allocate memory for contents of file (what if it's bigger than memory??)
-    char *contents = (char*) malloc(length * sizeof(char));
+    char *contents = malloc(length + 1);
     if(!contents){
         fclose(fp);
         return 1;
     }
 
     // Read whole file
-    int done = fread(contents, sizeof(char), length, fp);
+    int done = fread(contents, length, 1, fp);
     if(!done){
         fclose(fp);
         return 1;
