@@ -25,7 +25,9 @@ int decode(char *in){
 	      printf("%c",cur);
 	      count--;	      	   
 	   }
-        } 
+	   //reset count inside else block after loop to protect from errors
+           count = 0;
+       	} 
     }
    return 0;
 }
