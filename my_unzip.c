@@ -14,7 +14,7 @@ int decode(char *in, int len){
 	//cursor    
         char cur = in[i];
         int code = (int) cur;
-        //printf("%d: %d\n", i, code);
+        printf("%d: %d\n", i, code);
 	//if the character is a digit: parse full digit into count
         if ((i + 1) % 5 != 0){
             
@@ -51,24 +51,26 @@ int main(int argc, char *argv[]) {
     long length = ftell(fp);
     fseek(fp, 0, SEEK_SET);
 
-    // Allocate memory for contents of file (what if it's bigger than memory??)
-    char *contents = malloc(length + 1);
-    if(!contents){
-        fclose(fp);
-        return 1;
-    }
-
-    // Read whole file
-    int done = fread(contents, length, 1, fp);
-    if(!done){
-        fclose(fp);
-        return 1;
+    for(int i = 0; i < length; i++){
+        int num;
+        char asc;
+        int readn = fread(&num, sizeof(int), 1, fp);
+        if(!readn){
+            fclose(fp);
+            return 1;
+        }
+        int readc = fread(&asc, sizeof(char), 1, fp);
+        if(!readc){
+            fclose(fp);
+            return 1;
+        }
+        for(int i = 0; i < num; i++){
+            printf("%c", asc); 
+        }
+         // Decompress file
+       // decode(contents, length);
     }
     fclose(fp);
-     // Decompress file
-    decode(contents, length);
-    // Free memory
-    free(contents);
     return 0;
 }
 
