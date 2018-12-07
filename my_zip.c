@@ -44,11 +44,6 @@ int main(int argc, char *argv[])
     // Allocate memory for contents of file (what if it's bigger than memory??)
     char *contents = malloc(length + 1);
     if(!contents){
-        while(lengthy > 1){
-            lengthy = lengthy / 2;
-            char *contents = malloc(length + 1);
-              
-        
         fclose(fp);
         return 1;
     }
