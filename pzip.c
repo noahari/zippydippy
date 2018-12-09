@@ -21,8 +21,10 @@ pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t full = PTHREAD_COND_INITIALIZER;
 pthread_cond_t empty = PTHREAD_COND_INITIALIZER;
 
-char *pparse(char *chunk){
+int *pparse(char *chunk){
+    int *out = (int *) malloc(chunk_size * 5);
     long count = 0;
+    long fill = 0;
     char run = chunk[0];
     for(int i = 0; i < chunk_size; i++){
         char cur = chunk[i];
@@ -30,15 +32,21 @@ char *pparse(char *chunk){
             count++;
         else
         {
+            out[fill] = count;
+            out[fill + 1] = run;
+            fill = fill + 2;
             // fwrite(&count, sizeof(count), 1, stdout);
             // fwrite(&run, sizeof(char), 1, stdout);
             run = cur;
             count = 1;
         }
     }
+    out[fill] = count;
+    out[fill + 1] = run;
+    out[fill + 2] = '\0'; 
     // fwrite(&count, sizeof(count), 1, stdout);
     // fwrite(&run, sizeof(char), 1, stdout);
-    return 0;
+    return out;
 }
 
 void *consume(void *arg){
@@ -50,7 +58,7 @@ void *consume(void *arg){
 
         while(count == 0)
             if(pthread_cond_wait(&full, &mutex)){
-                fprintf(stderr, " error\n");
+                fprintf(stderr, "cond wait error\n");
                 return &err;
             }
 
@@ -61,14 +69,25 @@ void *consume(void *arg){
         use++;
         count--;
         if(pthread_cond_signal(&empty)){
-                fprintf(stderr, " error\n");
+                fprintf(stderr, "cond signal error\n");
                 return &err;
             }
         if(pthread_mutex_unlock(&mutex)){
-                fprintf(stderr, " error\n");
+                fprintf(stderr, "cond unlock error\n");
                 return &err;
             }
-        pparse(chunk);
+        int *parsed = pparse(chunk);
+        int *cur = parsed;
+
+        // Coordinate ordering with condition variables
+        while(*cur != '\\0'){
+            fwrite(*cur, sizeof(int), 1, stdout);
+            cur++;
+            fwrite(*cur, sizeof(char), 1, stdout);
+            cur++;
+        }
+
+        free(parsed);
     }
     return &good;
 }
@@ -88,14 +107,10 @@ int main(int argc, char *argv[])
     fseek(fp, 0, SEEK_SET);
 
     num_chunks = length/chunk_size;
-    // // Map the file to address space
-    // void *contents = mmap(NULL, length, PROT_READ, NULL, fp, 0);
-    // fclose(fp);
-
     pthread_t rope[numproc];
 
-    // Create buffer, calloc to initalize to zero
-    chunks = (char **) malloc(num_chunks * sizeof(char *)); // CHECK MALLOC ERROR
+    // Create buffer 
+    chunks = (char **) malloc(num_chunks * sizeof(char *)); 
     if(!chunks){
         fprintf(stderr, "Malloc error");
         return 1;
@@ -117,23 +132,23 @@ int main(int argc, char *argv[])
         // Do this w/o lock
         char *contents = (char *) mmap(NULL, chunk_size, PROT_READ, MAP_FILE, fileno(fp), i*chunk_size);
         if(pthread_mutex_lock(&mutex)){
-                fprintf(stderr, " error\n");
+                fprintf(stderr, " lock error\n");
                 return 1;
             }
         while(count == num_chunks)
             if(pthread_cond_wait(&empty, &mutex)){
-                fprintf(stderr, " error\n");
+                fprintf(stderr, "cond wait error\n");
                 return 1;
             }
         chunks[fill] = contents;
         fill++;
         count++;
         if(pthread_cond_signal(&full)){
-                fprintf(stderr, " error\n");
+                fprintf(stderr, "cond signal error\n");
                 return 1;
             }
         if(pthread_mutex_unlock(&mutex)){
-                fprintf(stderr, " error\n");
+                fprintf(stderr, "unlock error\n");
                 return 1;
             }
     }
