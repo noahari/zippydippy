@@ -9,17 +9,20 @@
 #include <pthread.h>
 #include <sys/mman.h>
 
-int chunk_size = 2 << 12;
 char **chunks;
+int chunk_size = 1 << 12;
+int err = 0;
+int good = 0;
 int fill = 0;
 int use = 0;
 int count = 0;
+int write = 0;
 long num_chunks = 0;
-int err = 1;
-int good = 0;
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t m2 = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t full = PTHREAD_COND_INITIALIZER;
 pthread_cond_t empty = PTHREAD_COND_INITIALIZER;
+pthread_cond_t print = PTHREAD_COND_INITIALIZER;
 
 int *pparse(char *chunk){
     int *out = (int *) malloc(chunk_size * 5);
@@ -30,13 +33,10 @@ int *pparse(char *chunk){
         char cur = chunk[i];
         if (cur == run)
             count++;
-        else
-        {
+        else{
             out[fill] = count;
             out[fill + 1] = run;
-            fill = fill + 2;
-            // fwrite(&count, sizeof(count), 1, stdout);
-            // fwrite(&run, sizeof(char), 1, stdout);
+            fill += 2;
             run = cur;
             count = 1;
         }
@@ -44,12 +44,10 @@ int *pparse(char *chunk){
     out[fill] = count;
     out[fill + 1] = run;
     out[fill + 2] = '\0'; 
-    // fwrite(&count, sizeof(count), 1, stdout);
-    // fwrite(&run, sizeof(char), 1, stdout);
     return out;
 }
 
-void *consume(void *arg){
+void *consume(void *arg){ 
     for(int i = 0; i < num_chunks; i ++){
         if(pthread_mutex_lock(&mutex)){
             fprintf(stderr, "Lock error\n");
@@ -62,31 +60,55 @@ void *consume(void *arg){
                 return &err;
             }
 
-        if(use == num_chunks - 1)
+        // We're done, no more to read from buffer
+        if(use == num_chunks)
             return &good; 
 
+        // Get chunk to work on
         char *chunk = chunks[use];
         use++;
         count--;
         if(pthread_cond_signal(&empty)){
                 fprintf(stderr, "cond signal error\n");
                 return &err;
-            }
+        }
         if(pthread_mutex_unlock(&mutex)){
-                fprintf(stderr, "cond unlock error\n");
+                fprintf(stderr, "unlock error\n");
                 return &err;
-            }
+        }
+        
+        // Parse chunk (will happen in parallel)
         int *parsed = pparse(chunk);
         int *cur = parsed;
 
+        if(pthread_mutex_lock(&m2)){
+            fprintf(stderr, "m2 lock error\n");
+            return &err;
+        }
+        while(use != write)
+            if(pthread_cond_wait(&print, &m2)){
+                fprintf(stderr, "print cond wait error\n");
+                return &err;
+            }
+
         // Coordinate ordering with condition variables
-        while(*cur != '\\0'){
-            fwrite(*cur, sizeof(int), 1, stdout);
-            cur++;
-            fwrite(*cur, sizeof(char), 1, stdout);
-            cur++;
+        while(*cur != '\0'){
+            fwrite(cur, sizeof(int), 1, stdout);
+            fwrite(cur + 1, sizeof(char), 1, stdout);
+            cur += 2;
         }
 
+        write++;
+
+        if(pthread_cond_signal(&print)){
+            fprintf(stderr, "print cond signal error\n");
+            return &err;
+       }
+
+        if(pthread_mutex_unlock(&m2)){
+                fprintf(stderr, "unlock error\n");
+                return &err;
+        }
         free(parsed);
     }
     return &good;
