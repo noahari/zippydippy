@@ -5,18 +5,20 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/sysinfo.h>
+#include <math.h>
+#include <errno.h>
+//#include <sys/sysinfo.h>
 #include <pthread.h>
 #include <sys/mman.h>
 
-char **chunks;
+char **chunks; // Buffer
 int chunk_size = 1 << 12;
 int err = 0;
 int good = 0;
-int fill = 0;
-int use = 0;
-int count = 0;
-int write = 0;
+int fill = 0; // Next index to put in buffer
+int use = 0; // Next index to get from buffer
+int count = 0; // Size of buffer
+int write = 0; // Which chunk are we writing
 long num_chunks = 0;
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t m2 = PTHREAD_MUTEX_INITIALIZER;
@@ -25,25 +27,30 @@ pthread_cond_t empty = PTHREAD_COND_INITIALIZER;
 pthread_cond_t print = PTHREAD_COND_INITIALIZER;
 
 int *pparse(char *chunk){
-    int *out = (int *) malloc(chunk_size * 5);
-    long count = 0;
-    long fill = 0;
+    printf("Processing %s\n", chunk);
+    int *out = (int *) malloc(strlen(chunk) * 5);
+    if(!out){
+       printf("Malloc error"); 
+    }
+    long my_count = 0;
+    long my_fill = 0;
     char run = chunk[0];
-    for(int i = 0; i < chunk_size; i++){
+    for(int i = 0; i < strlen(chunk); i++){
         char cur = chunk[i];
         if (cur == run)
             count++;
         else{
-            out[fill] = count;
-            out[fill + 1] = run;
-            fill += 2;
+            out[my_fill] = my_count;
+            out[my_fill + 1] = run;
+            my_fill += 2;
             run = cur;
-            count = 1;
+            my_count = 1;
         }
     }
-    out[fill] = count;
-    out[fill + 1] = run;
-    out[fill + 2] = '\0'; 
+    out[my_fill] = my_count;
+    out[my_fill + 1] = run;
+    out[my_fill + 2] = '\0'; 
+    printf("We have processed\n");
     return out;
 }
 
@@ -54,32 +61,38 @@ void *consume(void *arg){
             return &err;
         }
 
-        while(count == 0)
+        while(count == 0){
+            printf("Wait!\n");
             if(pthread_cond_wait(&full, &mutex)){
                 fprintf(stderr, "cond wait error\n");
                 return &err;
             }
+        }
 
+        printf("Done! Use %d\n",use);
         // We're done, no more to read from buffer
         if(use == num_chunks)
             return &good; 
 
         // Get chunk to work on
         char *chunk = chunks[use];
+        printf("Got a chunk! %s\n", chunk);
         use++;
         count--;
         if(pthread_cond_signal(&empty)){
-                fprintf(stderr, "cond signal error\n");
-                return &err;
+            fprintf(stderr, "cond signal error\n");
+            return &err;
         }
         if(pthread_mutex_unlock(&mutex)){
-                fprintf(stderr, "unlock error\n");
-                return &err;
+            fprintf(stderr, "unlock error\n");
+            return &err;
         }
         
         // Parse chunk (will happen in parallel)
         int *parsed = pparse(chunk);
+        printf("Got parsed chunk");
         int *cur = parsed;
+
 
         if(pthread_mutex_lock(&m2)){
             fprintf(stderr, "m2 lock error\n");
@@ -117,7 +130,8 @@ void *consume(void *arg){
 int main(int argc, char *argv[])
 {
     //get_nprocs_conf = how many procs configured, nonconf is available
-    long numproc = get_nprocs();
+    //long numproc = get_nprocs();
+    long numproc = 1;
     FILE *fp = fopen(argv[1], "r");
     if(!fp){
         fclose(fp);
@@ -128,7 +142,8 @@ int main(int argc, char *argv[])
     long length = ftell(fp);
     fseek(fp, 0, SEEK_SET);
 
-    num_chunks = length/chunk_size;
+    num_chunks = ceil((double) length/chunk_size);
+    printf("num chunks %ld\n", num_chunks);
     pthread_t rope[numproc];
 
     // Create buffer 
@@ -147,12 +162,19 @@ int main(int argc, char *argv[])
 		    fprintf(stderr, "Failed to create thread number %d", iter);
 		    break;
 	    }
+        else printf("Created thread %d succesfully\n", iter);
     }
 
     // "Producer"
     for(long i = 0; i < num_chunks; i++){
         // Do this w/o lock
-        char *contents = (char *) mmap(NULL, chunk_size, PROT_READ, MAP_FILE, fileno(fp), i*chunk_size);
+        printf("Mapping iteration %ld\n", i);
+        char *contents = (char *) mmap(NULL, chunk_size, PROT_READ, MAP_PRIVATE, fileno(fp), i*chunk_size);
+        if(contents == MAP_FAILED){
+            fprintf(stderr, "map error %s", strerror(errno));
+            return 1;
+        }
+        printf("Mapped chunk %ld. Contents: %s\n", i, contents);
         if(pthread_mutex_lock(&mutex)){
                 fprintf(stderr, " lock error\n");
                 return 1;
@@ -174,6 +196,7 @@ int main(int argc, char *argv[])
                 return 1;
             }
     }
+    printf("Waiting to join\n");
 
     for (int i = 0; i < iter; i++){
             //not sure, but if not null for arg2 we could track the return
