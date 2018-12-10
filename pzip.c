@@ -7,7 +7,7 @@
 #include <string.h>
 #include <math.h>
 #include <errno.h>
-//#include <sys/sysinfo.h>
+#include <sys/sysinfo.h>
 #include <pthread.h>
 #include <sys/mman.h>
 
@@ -130,8 +130,7 @@ void *consume(void *arg){
 int main(int argc, char *argv[])
 {
     //get_nprocs_conf = how many procs configured, nonconf is available
-    //long numproc = get_nprocs();
-    long numproc = 1;
+    long numproc = get_nprocs();
     FILE *fp = fopen(argv[1], "r");
     if(!fp){
         fclose(fp);
