@@ -18,8 +18,6 @@ int fill = 0; // Next index to put in buffer
 int use = 0; // Next index to get from buffer
 int count = 0; // Size of buffer
 int write = 0; // Which chunk are we writing
-long num_chunks = 0;
-long num_chunks_cp = 0;
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t m2 = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t full = PTHREAD_COND_INITIALIZER;
@@ -63,6 +61,7 @@ typedef struct __dasein{
     int **chunks;
     int *valid;
     void *fp;
+    int num_chunks;
     //   int err; DEAL WITH THIS
 } dasein;
 
@@ -92,21 +91,19 @@ dasein *anxiety(int num_chunks){
 
 void *producer(void *arg){ 
     // MALLOC AN INT!
+    dasein* order = (dasein*) arg; 
     while(1){
         if(pthread_mutex_lock(&mutex)){
             fprintf(stderr, "Lock error\n");
             return &err;
         }
-        if(fill >= num_chunks){
+        if(fill >= order->num_chunks){
             if(pthread_mutex_unlock(&mutex)){
                 fprintf(stderr, "unlock error\n");
                 return &err;
             }
             return &good;
         }
-    //structy struct cast arg holds fp & i
-    // WHILE COUNT == MAX ??? 
-        dasein* order = (dasein*) arg; 
         int my_fill = fill;
        // printf("My fill %d\n", my_fill);
         char *contents = (char *) mmap(NULL, chunk_size, PROT_READ, MAP_PRIVATE, fileno(order -> fp), my_fill*chunk_size);
@@ -143,7 +140,7 @@ void *producer(void *arg){
 }
 
 int consumer(dasein *order){
-   while(use < num_chunks_cp){
+   while(use < order->num_chunks){
        // printf("Wait!\n");
         if(pthread_mutex_lock(&mutex)){
             fprintf(stderr, "Lock error\n");
@@ -192,8 +189,7 @@ int main(int argc, char *argv[])
     fseek(fp, 0, SEEK_SET);
 
     // Number of chunks
-    num_chunks = ceil((double) length/chunk_size);
-    num_chunks_cp = num_chunks;
+    int num_chunks = ceil((double) length/chunk_size);
     if(num_chunks < numproc){
         numproc = num_chunks;
     }
@@ -201,6 +197,7 @@ int main(int argc, char *argv[])
 
     // Create struct
     dasein *chunkster = anxiety(num_chunks);
+    chunkster->num_chunks = num_chunks;
     chunkster->fp = fp;
     // Create producers
     //have to def outside so we can join later on # of threads created,
