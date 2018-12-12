@@ -27,6 +27,7 @@ pthread_cond_t empty = PTHREAD_COND_INITIALIZER;
 pthread_cond_t print = PTHREAD_COND_INITIALIZER;
 
 int *pparse(char *chunk){
+    //printf("Strlen %ld, first char %c\n", strlen(chunk), chunk[0]);
     int *out = (int *) malloc(5 * strlen(chunk));
     if(!out){
        printf("Malloc error"); 
@@ -34,8 +35,10 @@ int *pparse(char *chunk){
     long my_count = 0;
     long my_fill = 0;
     char run = chunk[0];
-    //printf("Strlen %ld, first char %c\n", strlen(chunk), chunk[0]);
-    for(long i = 0; i < strlen(chunk); i++){
+    long chunkBound = chunk_size;
+    if (strlen(chunk) < chunk_size)
+        chunkBound = strlen(chunk);
+    for(long i = 0; i < chunkBound; i++){
         // printf("Starting loop %ld, first char %c\n", i, chunk[0]);
         char cur = chunk[i];
         if (cur == run)
@@ -51,7 +54,7 @@ int *pparse(char *chunk){
     out[my_fill] = my_count;
     out[my_fill + 1] = run;
     out[my_fill + 2] = -1; 
-    //printf("We have processed, first char: %c\n", chunk[0]);
+   // printf("We have processed, first char: %c\n", chunk[0]);
     return out;
 }
 
@@ -89,18 +92,26 @@ dasein *anxiety(int num_chunks){
 
 void *producer(void *arg){ 
     // MALLOC AN INT!
-    while(num_chunks > 0){
+    while(1){
         if(pthread_mutex_lock(&mutex)){
             fprintf(stderr, "Lock error\n");
             return &err;
+        }
+        if(fill >= num_chunks){
+            if(pthread_mutex_unlock(&mutex)){
+                fprintf(stderr, "unlock error\n");
+                return &err;
+            }
+            return &good;
         }
     //structy struct cast arg holds fp & i
     // WHILE COUNT == MAX ??? 
         dasein* order = (dasein*) arg; 
         int my_fill = fill;
-        char *contents = (char *) mmap(NULL, chunk_size, PROT_READ, MAP_PRIVATE, fileno(order -> fp), fill*chunk_size);
+       // printf("My fill %d\n", my_fill);
+        char *contents = (char *) mmap(NULL, chunk_size, PROT_READ, MAP_PRIVATE, fileno(order -> fp), my_fill*chunk_size);
         fill++;
-        num_chunks--;
+        //num_chunks--;
         if(pthread_mutex_unlock(&mutex)){
             fprintf(stderr, "unlock error\n");
             return &err;
@@ -150,6 +161,7 @@ int consumer(dasein *order){
         int *chunk_start = chunk;
         use++;
         count--;
+        //printf("Printing chunk %d\n", use);
         while(*chunk != -1){
             fwrite(chunk, sizeof(int), 1, stdout);
             fwrite(chunk + 1, sizeof(char), 1, stdout);
