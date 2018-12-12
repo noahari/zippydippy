@@ -124,7 +124,8 @@ int consumer(){
 struct dasien{
     int **chunks;
     int *valid;
- //   int err; DEAL WITH THIS
+    void *fp;
+    //   int err; DEAL WITH THIS
 };
 
 struct dasien *anxiety(int num_chunks){
@@ -170,27 +171,23 @@ int main(int argc, char *argv[])
     }
     printf("num chunks %ld\n", num_chunks);
 
-    // Create buffer 
-    chunks = (int **) malloc(num_chunks * sizeof(int *)); 
-    if(!chunks){
-        fprintf(stderr, "Malloc error");
-        return 1;
-    }
-
+    // Create struct
+    dasein *chunkster = anxiety(num_chunks);
+    chunkster->fp = fp;
     // Create producers
     //have to def outside so we can join later on # of threads created,
     // not # of threads we SHOULD have created
     int iter;
     pthread_t rope[numproc];
     for(iter = 0; iter < numproc; iter++){
-        if (pthread_create(&rope[iter], NULL, producer, (void *)fp)){
+        if (pthread_create(&rope[iter], NULL, producer, (void *)chunkster)){
 		    fprintf(stderr, "Failed to create thread number %d", iter);
 		    break;
 	    }
         else printf("Created thread %d succesfully\n", iter);
     }
 
-    int consume = consumer();
+    int consume = consume(chunkster);
     if(consume)
         return 1;
   
