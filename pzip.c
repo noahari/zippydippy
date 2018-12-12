@@ -55,7 +55,7 @@ int *pparse(char *chunk){
 }
 
 void *consume(void *arg){ 
-    for(int i = 0; i < num_chunks; i ++){
+    while(num_chunks > 0){
         if(pthread_mutex_lock(&mutex)){
             fprintf(stderr, "Lock error\n");
             return &err;
@@ -73,14 +73,16 @@ void *consume(void *arg){
 
         // printf("Done! Use %d\n",my_use);
         // We're done, no more to read from buffer
-        if(use == num_chunks)
-            return &good; 
+        // if(my_use == num_chunks)
+        //     return &good; 
 
         // Get chunk to work on
         char *chunk = chunks[use];
         // printf("Got a chunk! %s\n", chunk);
         use++;
         count--;
+        num_chunks--;
+        printf("My use: %d, use %d\n", my_use, use); 
         if(pthread_cond_signal(&empty)){
             fprintf(stderr, "cond signal error\n");
             return &err;
@@ -90,7 +92,6 @@ void *consume(void *arg){
             return &err;
         }
 
-        // printf("%d\n", my_use);
         // printf("%d\n", write);
         
         // Parse chunk (will happen in parallel)
@@ -129,7 +130,7 @@ void *consume(void *arg){
 
         write++;
 
-        if(pthread_cond_signal(&print)){
+        if(pthread_cond_broadcast(&print)){
             fprintf(stderr, "print cond signal error\n");
             return &err;
        }
@@ -176,8 +177,8 @@ int main(int argc, char *argv[])
     //have to def outside so we can join later on # of threads created,
     // not # of threads we SHOULD have created
     int iter;
-    pthread_t rope[num_chunks];
-    for(iter = 0; iter < num_chunks; iter++){
+    pthread_t rope[numproc];
+    for(iter = 0; iter < numproc; iter++){
         if (pthread_create(&rope[iter], NULL, consume, NULL)){
 		    fprintf(stderr, "Failed to create thread number %d", iter);
 		    break;
@@ -199,7 +200,7 @@ int main(int argc, char *argv[])
                 fprintf(stderr, " lock error\n");
                 return 1;
             }
-        while(count == num_chunks)
+        while(count == num_chunks) // Is this superflouous?? 
             if(pthread_cond_wait(&empty, &mutex)){
                 fprintf(stderr, "cond wait error\n");
                 return 1;
