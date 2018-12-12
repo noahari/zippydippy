@@ -54,6 +54,38 @@ int *pparse(char *chunk){
     return out;
 }
 
+
+typedef struct __dasein{
+    int **chunks;
+    int *valid;
+    void *fp;
+    //   int err; DEAL WITH THIS
+} dasein;
+
+//this seems highly redundant, why dont we just define a struct then malloc(sizeof(struct))?
+dasein *anxiety(int num_chunks){
+    dasein *thing = malloc(sizeof(dasein));
+    if(!thing){
+        fprintf(stderr, "MALLOC ERROR: death");
+        return NULL;
+    }
+
+    thing->chunks = malloc(num_chunks * sizeof(int *));
+    if(!thing->chunks){
+        fprintf(stderr, "MALLOC ERROR: chunks");
+        return NULL;
+    }
+
+    thing->valid = calloc(num_chunks, sizeof(int));
+    if(!thing->valid){
+        fprintf(stderr, "MALLOC ERROR: invalid");
+        return NULL;
+    }
+
+    return thing;
+}
+
+
 void *producer(void *arg){ 
     // MALLOC AN INT!
     while(num_chunks > 0){
@@ -63,7 +95,7 @@ void *producer(void *arg){
         }
     //structy struct cast arg holds fp & i
     // WHILE COUNT == MAX ??? 
-        struct dasien* order = (struct dasien*) arg; 
+        dasein* order = (dasein*) arg; 
         int my_fill = fill;
         char *contents = (char *) mmap(NULL, chunk_size, PROT_READ, MAP_PRIVATE, fileno(order -> fp), fill*chunk_size);
         fill++;
@@ -96,7 +128,7 @@ void *producer(void *arg){
     return &good;
 }
 
-int consumer(struct dasien *order){
+int consumer(dasein *order){
    while(use < num_chunks){
        // printf("Wait!\n");
         if(pthread_mutex_lock(&mutex)){
@@ -123,34 +155,6 @@ int consumer(struct dasien *order){
     return 0;
 }
 
-typedef struct __dasien{
-    int **chunks;
-    int *valid;
-    void *fp;
-    //   int err; DEAL WITH THIS
-} dasien;
-
-struct dasien *anxiety(int num_chunks){
-    struct dasien *thing = malloc(sizeof(struct dasien));
-    if(!thing){
-        fprintf(stderr, "MALLOC ERROR: death");
-        return NULL;
-    }
-
-    thing->chunks = malloc(num_chunks * sizeof(int *));
-    if(!thing->chunks){
-        fprintf(stderr, "MALLOC ERROR: chunks");
-        return NULL;
-    }
-
-    thing->valid = calloc(num_chunks, sizeof(int));
-    if(!thing->valid){
-        fprintf(stderr, "MALLOC ERROR: invalid");
-        return NULL;
-    }
-
-    return thing;
-}
 
 int main(int argc, char *argv[])
 {
@@ -189,7 +193,7 @@ int main(int argc, char *argv[])
         else printf("Created thread %d succesfully\n", iter);
     }
 
-    int consume = consume(chunkster);
+    int consume = consumer((void *)chunkster);
     if(consume)
         return 1;
   
