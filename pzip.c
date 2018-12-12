@@ -14,7 +14,6 @@
 int chunk_size = 1 << 12;
 int fill = 0; // Next index to put in buffer
 int use = 0; // Next index to get from buffer
-int count = 0; // Size of buffer
 int write = 0; // Which chunk are we writing
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t m2 = PTHREAD_MUTEX_INITIALIZER;
@@ -127,7 +126,6 @@ void *producer(void *arg){
         }
         order->chunks[my_fill] = parsed;
         order->valid[my_fill] = 1;
-        count++;
         if(pthread_cond_signal(&full)){
             fprintf(stderr, "cond signal error\n");
             order->err = 1;
@@ -158,12 +156,10 @@ int consumer(dasein *order){
                fprintf(stderr, "cond wait error\n");
                return 1;
             }
-            //printf("Signaled. count: %d, use: %d, valid use: %d \n", count, use, order->valid[use]);
         }
         int *chunk = order->chunks[use]; 
         int *chunk_start = chunk;
         use++;
-        count--;
         //printf("Printing chunk %d\n", use);
         while(*chunk != -1){
             fwrite(chunk, sizeof(int), 1, stdout);
