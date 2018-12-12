@@ -10,11 +10,11 @@
 #include <sys/sysinfo.h>
 #include <pthread.h>
 #include <sys/mman.h>
+#include <unistd.h>
 
-int chunk_size = 1 << 12;
+int chunk_size;
 int fill = 0; // Next index to put in buffer
 int use = 0; // Next index to get from buffer
-int write = 0; // Which chunk are we writing
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t m2 = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t full = PTHREAD_COND_INITIALIZER;
@@ -23,16 +23,17 @@ pthread_cond_t print = PTHREAD_COND_INITIALIZER;
 
 int *pparse(char *chunk){
     //printf("Strlen %ld, first char %c\n", strlen(chunk), chunk[0]);
-    int *out = (int *) malloc(5 * strlen(chunk));
+    long chunkBound = chunk_size;
+    if (strlen(chunk) < chunk_size)
+        chunkBound = strlen(chunk);
+    int *out = (int *) malloc(5 * chunkBound);
     if(!out){
        printf("Malloc error"); 
     }
     long my_count = 0;
     long my_fill = 0;
     char run = chunk[0];
-    long chunkBound = chunk_size;
-    if (strlen(chunk) < chunk_size)
-        chunkBound = strlen(chunk);
+
     for(long i = 0; i < chunkBound; i++){
         // printf("Starting loop %ld, first char %c\n", i, chunk[0]);
         char cur = chunk[i];
@@ -58,7 +59,7 @@ typedef struct __dasein{
     int **chunks;
     int *valid;
     void *fp;
-    int num_chunks;
+    long num_chunks;
     int err;
 } dasein;
 
@@ -87,7 +88,6 @@ dasein *anxiety(int num_chunks){
 
 
 void *producer(void *arg){ 
-    // MALLOC AN INT!
     dasein* order = (dasein*) arg; 
     while(1){
         if(pthread_mutex_lock(&mutex)){
@@ -108,7 +108,6 @@ void *producer(void *arg){
        // printf("My fill %d\n", my_fill);
         char *contents = (char *) mmap(NULL, chunk_size, PROT_READ, MAP_PRIVATE, fileno(order -> fp), my_fill*chunk_size);
         fill++;
-        //num_chunks--;
         if(pthread_mutex_unlock(&mutex)){
             fprintf(stderr, "unlock error\n");
             order->err = 1;
@@ -117,7 +116,6 @@ void *producer(void *arg){
 
         // Parse chunk (will happen in parallel)
         int *parsed = pparse(contents);
-        //printf("Got parsed: %p. Fill: %d\n", parsed, my_fill);
 
         if(pthread_mutex_lock(&mutex)){
             fprintf(stderr, "Lock error\n");
@@ -160,7 +158,7 @@ int consumer(dasein *order){
         int *chunk = order->chunks[use]; 
         int *chunk_start = chunk;
         use++;
-        //printf("Printing chunk %d\n", use);
+       // printf("Printing chunk %d\n", use);
         while(*chunk != -1){
             fwrite(chunk, sizeof(int), 1, stdout);
             fwrite(chunk + 1, sizeof(char), 1, stdout);
@@ -190,8 +188,9 @@ int main(int argc, char *argv[])
     long length = ftell(fp);
     fseek(fp, 0, SEEK_SET);
 
-    // Number of chunks
-    int num_chunks = ceil((double) length/chunk_size);
+    // Number of chunks must multiple of page size for mmap to work
+    chunk_size = sysconf(_SC_PAGESIZE);
+    long num_chunks = ceil((double) length/chunk_size);
     if(num_chunks < numproc){
         numproc = num_chunks;
     }
@@ -225,6 +224,9 @@ int main(int argc, char *argv[])
 	    //values of EACH thread by storing in an array? idk why we would
 	    //need to though for this project
         int ret = pthread_join(rope[i], NULL);
+        if (chunkster->err){
+            fprintf(stderr, "Producer error\n");
+        }
 	    if (ret){
 		    fprintf(stderr, "Failed to join with thread number %d\n", i);
             fprintf(stderr, "Error code: %s\n", strerror(ret));
