@@ -11,7 +11,6 @@
 #include <pthread.h>
 #include <sys/mman.h>
 
-int **chunks; // Buffer
 int chunk_size = 1 << 12;
 int err = 0;
 int good = 0;
@@ -20,6 +19,7 @@ int use = 0; // Next index to get from buffer
 int count = 0; // Size of buffer
 int write = 0; // Which chunk are we writing
 long num_chunks = 0;
+long num_chunks_cp = 0;
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t m2 = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t full = PTHREAD_COND_INITIALIZER;
@@ -27,7 +27,6 @@ pthread_cond_t empty = PTHREAD_COND_INITIALIZER;
 pthread_cond_t print = PTHREAD_COND_INITIALIZER;
 
 int *pparse(char *chunk){
-    //printf("Processing %s\n", chunk);
     int *out = (int *) malloc(5 * strlen(chunk));
     if(!out){
        printf("Malloc error"); 
@@ -35,7 +34,9 @@ int *pparse(char *chunk){
     long my_count = 0;
     long my_fill = 0;
     char run = chunk[0];
-    for(int i = 0; i < strlen(chunk); i++){
+    //printf("Strlen %ld, first char %c\n", strlen(chunk), chunk[0]);
+    for(long i = 0; i < strlen(chunk); i++){
+        // printf("Starting loop %ld, first char %c\n", i, chunk[0]);
         char cur = chunk[i];
         if (cur == run)
             my_count++;
@@ -50,7 +51,7 @@ int *pparse(char *chunk){
     out[my_fill] = my_count;
     out[my_fill + 1] = run;
     out[my_fill + 2] = -1; 
-    //printf("We have processed\n");
+    //printf("We have processed, first char: %c\n", chunk[0]);
     return out;
 }
 
@@ -99,6 +100,7 @@ void *producer(void *arg){
         int my_fill = fill;
         char *contents = (char *) mmap(NULL, chunk_size, PROT_READ, MAP_PRIVATE, fileno(order -> fp), fill*chunk_size);
         fill++;
+        num_chunks--;
         if(pthread_mutex_unlock(&mutex)){
             fprintf(stderr, "unlock error\n");
             return &err;
@@ -106,16 +108,15 @@ void *producer(void *arg){
 
         // Parse chunk (will happen in parallel)
         int *parsed = pparse(contents);
+        //printf("Got parsed: %p. Fill: %d\n", parsed, my_fill);
 
         if(pthread_mutex_lock(&mutex)){
             fprintf(stderr, "Lock error\n");
             return &err;
         }
         order->chunks[my_fill] = parsed;
-        order->valid[use] = 1;
-        chunks[my_fill] = parsed;
+        order->valid[my_fill] = 1;
         count++;
-        num_chunks--;
         if(pthread_cond_signal(&full)){
             fprintf(stderr, "cond signal error\n");
             return &err;
@@ -124,33 +125,41 @@ void *producer(void *arg){
             fprintf(stderr, "unlock error\n");
             return &err;
         }
+        //printf("outlock 2 looping, num_chunks: %ld\n", num_chunks);
     }
+    //printf("REturning!\n");
     return &good;
 }
 
 int consumer(dasein *order){
-   while(use < num_chunks){
+   while(use < num_chunks_cp){
        // printf("Wait!\n");
         if(pthread_mutex_lock(&mutex)){
             fprintf(stderr, "Lock error\n");
             return 1;
         }
-        while(count == 0 && !order->valid[use]){
+        while(!order->valid[use]){
+            //printf("Waiting. Use %d\n", use);
             if(pthread_cond_wait(&full, &mutex)){
                fprintf(stderr, "cond wait error\n");
                return 1;
             }
+            //printf("Signaled. count: %d, use: %d, valid use: %d \n", count, use, order->valid[use]);
         }
         int *chunk = order->chunks[use]; 
+        int *chunk_start = chunk;
         use++;
         count--;
-        fwrite(chunk, sizeof(int), 1, stdout);
-        fwrite(chunk + 1, sizeof(char), 1, stdout);
+        while(*chunk != -1){
+            fwrite(chunk, sizeof(int), 1, stdout);
+            fwrite(chunk + 1, sizeof(char), 1, stdout);
+            chunk += 2;
+        }
         if(pthread_mutex_unlock(&mutex)){
             fprintf(stderr, "unlock error\n");
             return 1;
         } 
-        free(chunk);
+        free(chunk_start);
     }
     return 0;
 }
@@ -172,10 +181,11 @@ int main(int argc, char *argv[])
 
     // Number of chunks
     num_chunks = ceil((double) length/chunk_size);
+    num_chunks_cp = num_chunks;
     if(num_chunks < numproc){
         numproc = num_chunks;
     }
-    printf("num chunks %ld\n", num_chunks);
+    //printf("num chunks %ld\n", num_chunks);
 
     // Create struct
     dasein *chunkster = anxiety(num_chunks);
@@ -190,7 +200,7 @@ int main(int argc, char *argv[])
 		    fprintf(stderr, "Failed to create thread number %d", iter);
 		    break;
 	    }
-        else printf("Created thread %d succesfully\n", iter);
+        //else printf("Created thread %d succesfully\n", iter);
     }
 
     int consume = consumer((void *)chunkster);
@@ -211,7 +221,7 @@ int main(int argc, char *argv[])
 	    }
     }
 
-    free(chunks);
+    free(chunkster);
     return 0;
 } 
 
