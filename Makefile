@@ -10,7 +10,7 @@ my_unzip: my_unzip.c
 	$(CC) $(CFLAGS) -o my_unzip my_unzip.c
 
 pzip: pzip.c
-	$(CC) $(CFLAGS) -pthread -o pzip pzip.c
+	$(CC) $(CFLAGS) -pthread -o pzip pzip.c -lm
 
 clean:
 	$(RM) my_zip my_unzip pzip *.o 
