@@ -55,6 +55,7 @@ int *pparse(char *chunk){
 }
 
 void *producer(void *arg){ 
+    // MALLOC AN INT!
     while(num_chunks > 0){
         if(pthread_mutex_lock(&mutex)){
             fprintf(stderr, "Lock error\n");
@@ -118,6 +119,34 @@ int consumer(){
         free(chunk);
     }
     return 0;
+}
+
+struct dasien{
+    int **chunks;
+    int *valid;
+ //   int err; DEAL WITH THIS
+};
+
+struct dasien *anxiety(int num_chunks){
+    struct dasien *thing = malloc(sizeof(struct dasien));
+    if(!thing){
+        fprintf(stderr, "MALLOC ERROR: death");
+        return NULL;
+    }
+
+    thing->chunks = malloc(num_chunks * sizeof(int *));
+    if(!thing->chunks){
+        fprintf(stderr, "MALLOC ERROR: chunks");
+        return NULL;
+    }
+
+    thing->valid = calloc(num_chunks, sizeof(int));
+    if(!thing->valid){
+        fprintf(stderr, "MALLOC ERROR: invalid");
+        return NULL;
+    }
+
+    return thing;
 }
 
 int main(int argc, char *argv[])
