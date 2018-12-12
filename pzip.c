@@ -12,8 +12,6 @@
 #include <sys/mman.h>
 
 int chunk_size = 1 << 12;
-int err = 0;
-int good = 0;
 int fill = 0; // Next index to put in buffer
 int use = 0; // Next index to get from buffer
 int count = 0; // Size of buffer
@@ -62,7 +60,7 @@ typedef struct __dasein{
     int *valid;
     void *fp;
     int num_chunks;
-    //   int err; DEAL WITH THIS
+    int err;
 } dasein;
 
 //this seems highly redundant, why dont we just define a struct then malloc(sizeof(struct))?
@@ -95,14 +93,17 @@ void *producer(void *arg){
     while(1){
         if(pthread_mutex_lock(&mutex)){
             fprintf(stderr, "Lock error\n");
-            return &err;
+            order->err = 1;
+            return NULL; 
         }
         if(fill >= order->num_chunks){
             if(pthread_mutex_unlock(&mutex)){
                 fprintf(stderr, "unlock error\n");
-                return &err;
+                order->err = 1;
+                return NULL;
             }
-            return &good;
+            order->err = 0;
+            return NULL;
         }
         int my_fill = fill;
        // printf("My fill %d\n", my_fill);
@@ -111,7 +112,8 @@ void *producer(void *arg){
         //num_chunks--;
         if(pthread_mutex_unlock(&mutex)){
             fprintf(stderr, "unlock error\n");
-            return &err;
+            order->err = 1;
+            return NULL;
         }
 
         // Parse chunk (will happen in parallel)
@@ -120,23 +122,27 @@ void *producer(void *arg){
 
         if(pthread_mutex_lock(&mutex)){
             fprintf(stderr, "Lock error\n");
-            return &err;
+            order->err = 1;
+            return NULL;
         }
         order->chunks[my_fill] = parsed;
         order->valid[my_fill] = 1;
         count++;
         if(pthread_cond_signal(&full)){
             fprintf(stderr, "cond signal error\n");
-            return &err;
+            order->err = 1;
+            return NULL;
         }
         if(pthread_mutex_unlock(&mutex)){
             fprintf(stderr, "unlock error\n");
-            return &err;
+            order->err = 1;
+            return NULL;
         }
         //printf("outlock 2 looping, num_chunks: %ld\n", num_chunks);
     }
     //printf("REturning!\n");
-    return &good;
+    order->err = 0;
+    return NULL;
 }
 
 int consumer(dasein *order){
