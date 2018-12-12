@@ -63,9 +63,9 @@ void *producer(void *arg){
         }
     //structy struct cast arg holds fp & i
     // WHILE COUNT == MAX ??? 
-        FILE *fp = (FILE *) arg;
+        struct dasien* order = (struct dasien*) arg; 
         int my_fill = fill;
-        char *contents = (char *) mmap(NULL, chunk_size, PROT_READ, MAP_PRIVATE, fileno(fp), fill*chunk_size);
+        char *contents = (char *) mmap(NULL, chunk_size, PROT_READ, MAP_PRIVATE, fileno(order -> fp), fill*chunk_size);
         fill++;
         if(pthread_mutex_unlock(&mutex)){
             fprintf(stderr, "unlock error\n");
@@ -79,6 +79,8 @@ void *producer(void *arg){
             fprintf(stderr, "Lock error\n");
             return &err;
         }
+        order->chunks[my_fill] = parsed;
+        order->valid[use] = 1;
         chunks[my_fill] = parsed;
         count++;
         num_chunks--;
@@ -94,20 +96,20 @@ void *producer(void *arg){
     return &good;
 }
 
-int consumer(){
+int consumer(struct dasien *order){
    while(use < num_chunks){
        // printf("Wait!\n");
         if(pthread_mutex_lock(&mutex)){
             fprintf(stderr, "Lock error\n");
             return 1;
         }
-        while(count == 0){
+        while(count == 0 && !order->valid[use]){
             if(pthread_cond_wait(&full, &mutex)){
                fprintf(stderr, "cond wait error\n");
                return 1;
             }
         }
-        int *chunk = chunks[use];
+        int *chunk = order->chunks[use]; 
         use++;
         count--;
         fwrite(chunk, sizeof(int), 1, stdout);
@@ -121,11 +123,11 @@ int consumer(){
     return 0;
 }
 
-struct dasien{
+typedef struct __dasien{
     int **chunks;
     int *valid;
  //   int err; DEAL WITH THIS
-};
+}; dasien
 
 struct dasien *anxiety(int num_chunks){
     struct dasien *thing = malloc(sizeof(struct dasien));
