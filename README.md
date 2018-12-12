@@ -1,27 +1,43 @@
 # zippydippy
-A short implementation of Parallelized Serial Run-Length Encoding
+A phenomenology of Parallelized Serial Run-Length Encoding
 
 ## How do we parallelize data?
-First, mmap the data so the whole file is in the address space.
+Get the number of processes on the computer and store it locally.
+
+Open the file and seek to find its length, storing that locally.
 
 Divide the data up into i chunks where i = file size/4kb (i.e. chunk size = 4kb).
 
-Once a zip thread finishes its chunk, print as we go.
+If there are fewer chunks than processors, we overwrite our number of processors.
 
-##How are chunks divided
-Currently, we read in the data at once and store it, increasing the pointer passed into each thread's function by length/numprocs * i of thread.
+We fill occupy our available processors with a thread each running Producer.
 
-We do this because it 
+When Producer is done, it stores its parsed data in a struct.
 
-## How do use threads?
+Consumer is run in main thread.
+
+##How are chunks divided?
+Chunks are mapped based on page side to work with mmap
+
+Most of the time then chunks will be of size 4096
+
+## How do we use threads?
 The Number of threads = number of cores on processors by use of get_nprocs (avoiding risk of inactive processors)
 
 Each ith thread will be given a chunk of the data.
 
 When a thread finishes its chunk, it finds another available chunk, if there are none it finishes.
 
-In this implementation it treats the data as one producer and the four threads as four consumers.
+When a thread finishes it stores its data in the struct before finding another chunk.
 ## What data structures?
-Array containing info defining what chunks have been allocated to a thread, so we know what chunk to allocate. 
+A struct containing:
 
+	Array containing pointers to parsed chunks. 
 
+	A BITMAP that holds a valid bit
+
+	A pointer to the input file
+
+	An int of the total number of chunks in the file
+
+	An int to hold error codes
