@@ -50,6 +50,7 @@ int *pparse(char *chunk){
     out[my_fill] = my_count;
     out[my_fill + 1] = run;
     out[my_fill + 2] = -1; 
+    munmap(chunk, chunkBound);
    // printf("We have processed, first char: %c\n", chunk[0]);
     return out;
 }
@@ -233,7 +234,8 @@ int main(int argc, char *argv[])
 		    break;
 	    }
     }
-
+    free(chunkster->chunks);
+    free(chunkster->valid);
     free(chunkster);
     return 0;
 } 
