@@ -11,13 +11,7 @@
 #include <sys/mman.h>
 #include <unistd.h>
 
-int chunk_size;
-int fill = 0; // Next index to put in buffer
-int use = 0; // Next index to get from buffer
-pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_cond_t full = PTHREAD_COND_INITIALIZER;
-
-// Struct to hold information about zipped chunks
+// Struct to hold shared information 
 typedef struct __dasein{
     // Array of pointers to each zipped
     int **chunks;
@@ -25,6 +19,11 @@ typedef struct __dasein{
     int *valid;
     void *fp;
     long num_chunks;
+    int chunk_size;
+    int fill;
+    int use;
+    pthread_mutex_t mutex;
+    pthread_cond_t full; 
 } dasein;
 
 // Initialization for struct
@@ -46,6 +45,11 @@ dasein *anxiety(int num_chunks){
         fprintf(stderr, "MALLOC ERROR: invalid");
         return NULL;
     }
+
+    thing->fill = 0;
+    thing->use = 0;
+    pthread_mutex_init(&thing->mutex, NULL);
+    pthread_cond_init(&thing->full, NULL);
 
     return thing;
 }
@@ -88,32 +92,32 @@ void *producer(void *arg){
     //loop, we return inside for all paths
     while(1){
         //LOCK
-        if(pthread_mutex_lock(&mutex)){
+        if(pthread_mutex_lock(&(order->mutex))){
             fprintf(stderr, "Lock error\n");
             return NULL; 
         }
         //check if we are out of chunks, if so return
-        if(fill >= order->num_chunks){
+        if(order->fill >= order->num_chunks){
             //UNLOCK
-            if(pthread_mutex_unlock(&mutex)){
+            if(pthread_mutex_unlock(&(order->mutex))){
                 fprintf(stderr, "unlock error\n");
                 return NULL;
             }
             return NULL;
         }
         //
-        int my_fill = fill;
-        fill++;
+        int my_fill = order->fill;
+        order->fill++;
         //UNLOCK
-        if(pthread_mutex_unlock(&mutex)){
+        if(pthread_mutex_unlock(&(order->mutex))){
             fprintf(stderr, "unlock error\n");
             return NULL;
         }
-        char *contents = (char *) mmap(NULL, chunk_size, PROT_READ, MAP_PRIVATE, fileno(order -> fp), my_fill*chunk_size);
+        char *contents = (char *) mmap(NULL, order->chunk_size, PROT_READ, MAP_PRIVATE, fileno(order -> fp), my_fill*order->chunk_size);
         //store the chunk size separately in order to check the case
         //the chunk is smaller, e.g. the chunk at the end of a 2 chunk
         //4.1 KB file
-        long chunkBound = chunk_size;
+        long chunkBound = order->chunk_size;
         if (my_fill == order->num_chunks - 1)
             chunkBound = strlen(contents);
 
@@ -121,7 +125,7 @@ void *producer(void *arg){
         int *parsed = pparse(contents, chunkBound);
 
         //LOCK
-        if(pthread_mutex_lock(&mutex)){
+        if(pthread_mutex_lock(&(order->mutex))){
             fprintf(stderr, "Lock error\n");
             return NULL;
         }
@@ -130,12 +134,12 @@ void *producer(void *arg){
         order->valid[my_fill] = 1;
         //signals the consumer that something valid was stored in the
         //buffer of the struct to print
-        if(pthread_cond_signal(&full)){
+        if(pthread_cond_signal(&(order->full))){
             fprintf(stderr, "cond signal error\n");
             return NULL;
         }
         //UNLOCK
-        if(pthread_mutex_unlock(&mutex)){
+        if(pthread_mutex_unlock(&(order->mutex))){
             fprintf(stderr, "unlock error\n");
             return NULL;
         }
@@ -147,17 +151,17 @@ int consumer(dasein *order){
    //loops over global variable use so we print in order
    //and we only try to print equal to the number of
    //chunks that are actually there
-   while(use < order->num_chunks){
+   while(order->use < order->num_chunks){
         int iter = 0;
         //LOCK
-        if(pthread_mutex_lock(&mutex)){
+        if(pthread_mutex_lock(&(order->mutex))){
             fprintf(stderr, "Lock error\n");
             return 1;
         }
         //If we are active or signalled and are not ready to print the
         //correct chunk in terms of order, we spin
-        while(!order->valid[use]){
-            if(pthread_cond_wait(&full, &mutex)){
+        while(!order->valid[order->use]){
+            if(pthread_cond_wait(&(order->full), &(order->mutex))){
                fprintf(stderr, "cond wait error\n");
                return 1;
             }
@@ -165,8 +169,8 @@ int consumer(dasein *order){
         //save what chunk we are on and then increment the use var
         //so that when we loop over the first while we will be checking
         //for the correct chunk to print in order
-        int *chunk = order->chunks[use]; 
-        use++;
+        int *chunk = order->chunks[order->use]; 
+        order->use++;
         //loop over the chunk, printing until we hit the boundary
         //we defined as a value of -1
         while(chunk[iter] != -1){
@@ -175,7 +179,7 @@ int consumer(dasein *order){
             iter += 2;
         }
         //UNLOCK
-        if(pthread_mutex_unlock(&mutex)){
+        if(pthread_mutex_unlock(&(order->mutex))){
             fprintf(stderr, "unlock error\n");
             return 1;
         } 
@@ -200,7 +204,7 @@ int main(int argc, char *argv[])
     fseek(fp, 0, SEEK_SET);
 
     // Number of chunks must be a multiple of page size for mmap to work
-    chunk_size = sysconf(_SC_PAGESIZE);
+    long chunk_size = sysconf(_SC_PAGESIZE);
     long num_chunks = ceil((double) length/chunk_size);
     if(num_chunks < numproc){
         numproc = num_chunks;
@@ -209,6 +213,7 @@ int main(int argc, char *argv[])
     // Create struct and initialize
     dasein *chunkster = anxiety(num_chunks);
     chunkster->num_chunks = num_chunks;
+    chunkster->chunk_size = chunk_size;
     chunkster->fp = fp;
     // Create a thread for each processor each running producer
     //have to def outside so we can join later on # of threads created,
@@ -231,14 +236,6 @@ int main(int argc, char *argv[])
     }
     //loops over the rope waiting for all threads to finish before 
     //freeing data that threads may use and returning
-    // for (int i = 0; i < iter; i++){
-    //     int ret = pthread_join(rope[i], NULL);
-	//     if (ret){
-	// 	    fprintf(stderr, "Failed to join with thread number %d\n", i);
-    //         fprintf(stderr, "Error code: %s\n", strerror(ret));
-	// 	    break;
-	//     }
-    // }
     //free memory of the struct and the individually malloc'd fields
     free(chunkster->chunks);
     free(chunkster->valid);
