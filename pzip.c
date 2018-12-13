@@ -21,11 +21,8 @@ pthread_cond_t full = PTHREAD_COND_INITIALIZER;
 pthread_cond_t empty = PTHREAD_COND_INITIALIZER;
 pthread_cond_t print = PTHREAD_COND_INITIALIZER;
 
-int *pparse(char *chunk){
+int *pparse(char *chunk, int chunkBound){
     //printf("Strlen %ld, first char %c\n", strlen(chunk), chunk[0]);
-    long chunkBound = chunk_size;
-    if (strlen(chunk) < chunk_size)
-        chunkBound = strlen(chunk);
     int *out = (int *) malloc((5 * chunkBound) + 1);
     if(!out){
        printf("Malloc error"); 
@@ -114,9 +111,12 @@ void *producer(void *arg){
             order->err = 1;
             return NULL;
         }
+        long chunkBound = chunk_size;
+        if (my_fill == order->num_chunks - 1)
+            chunkBound = strlen(contents);
 
         // Parse chunk (will happen in parallel)
-        int *parsed = pparse(contents);
+        int *parsed = pparse(contents, chunkBound);
 
         if(pthread_mutex_lock(&mutex)){
             fprintf(stderr, "Lock error\n");
