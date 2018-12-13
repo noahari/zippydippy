@@ -6,7 +6,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
-#include <errno.h>
 #include <sys/sysinfo.h>
 #include <pthread.h>
 #include <sys/mman.h>
@@ -104,13 +103,13 @@ void *producer(void *arg){
         }
         //
         int my_fill = fill;
-        char *contents = (char *) mmap(NULL, chunk_size, PROT_READ, MAP_PRIVATE, fileno(order -> fp), my_fill*chunk_size);
         fill++;
         //UNLOCK
         if(pthread_mutex_unlock(&mutex)){
             fprintf(stderr, "unlock error\n");
             return NULL;
         }
+        char *contents = (char *) mmap(NULL, chunk_size, PROT_READ, MAP_PRIVATE, fileno(order -> fp), my_fill*chunk_size);
         //store the chunk size separately in order to check the case
         //the chunk is smaller, e.g. the chunk at the end of a 2 chunk
         //4.1 KB file
@@ -149,6 +148,7 @@ int consumer(dasein *order){
    //and we only try to print equal to the number of
    //chunks that are actually there
    while(use < order->num_chunks){
+        int iter = 0;
         //LOCK
         if(pthread_mutex_lock(&mutex)){
             fprintf(stderr, "Lock error\n");
@@ -167,7 +167,6 @@ int consumer(dasein *order){
         //for the correct chunk to print in order
         int *chunk = order->chunks[use]; 
         use++;
-        int iter = 0;
         //loop over the chunk, printing until we hit the boundary
         //we defined as a value of -1
         while(chunk[iter] != -1){

@@ -40,7 +40,6 @@ int main(int argc, char *argv[])
     long length = ftell(fp);
     fseek(fp, 0, SEEK_SET);
 
-    long lengthy = length;
     // Allocate memory for contents of file (what if it's bigger than memory??)
     char *contents = malloc(length + 1);
     if(!contents){
