@@ -26,7 +26,7 @@ int *pparse(char *chunk){
     long chunkBound = chunk_size;
     if (strlen(chunk) < chunk_size)
         chunkBound = strlen(chunk);
-    int *out = (int *) malloc(5 * chunkBound);
+    int *out = (int *) malloc((5 * chunkBound) + 1);
     if(!out){
        printf("Malloc error"); 
     }
@@ -157,19 +157,19 @@ int consumer(dasein *order){
             }
         }
         int *chunk = order->chunks[use]; 
-        int *chunk_start = chunk;
         use++;
+        int iter = 0;
        // printf("Printing chunk %d\n", use);
-        while(*chunk != -1){
-            fwrite(chunk, sizeof(int), 1, stdout);
-            fwrite(chunk + 1, sizeof(char), 1, stdout);
-            chunk += 2;
+        while(chunk[iter] != -1){
+            fwrite(&chunk[iter], sizeof(int), 1, stdout);
+            fwrite(&chunk[iter + 1], sizeof(char), 1, stdout);
+            iter += 2;
         }
         if(pthread_mutex_unlock(&mutex)){
             fprintf(stderr, "unlock error\n");
             return 1;
         } 
-        free(chunk_start);
+        free(chunk);
     }
     return 0;
 }
