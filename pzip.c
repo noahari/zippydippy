@@ -225,7 +225,7 @@ int main(int argc, char *argv[])
     int consume = consumer((void *)chunkster);
     //error of failed print
     if(consume){
-        fprintf("Failed Print")
+        fprintf(stderr, "Failed Print");
         return 1;
     }
     //loops over the rope waiting for all threads to finish before 
