@@ -23,6 +23,7 @@ pthread_cond_t print = PTHREAD_COND_INITIALIZER;
 
 int *pparse(char *chunk, int chunkBound){
     //printf("Strlen %ld, first char %c\n", strlen(chunk), chunk[0]);
+
     int *out = (int *) malloc((5 * chunkBound) + 1);
     if(!out){
        printf("Malloc error"); 
