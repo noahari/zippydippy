@@ -16,52 +16,23 @@ int chunk_size;
 int fill = 0; // Next index to put in buffer
 int use = 0; // Next index to get from buffer
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t m2 = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t full = PTHREAD_COND_INITIALIZER;
-pthread_cond_t empty = PTHREAD_COND_INITIALIZER;
-pthread_cond_t print = PTHREAD_COND_INITIALIZER;
 
-int *pparse(char *chunk, int chunkBound){
-    int *out = (int *) malloc((5 * chunkBound) + 1);
-    if(!out){
-       printf("Malloc error"); 
-    }
-    long my_count = 0;
-    long my_fill = 0;
-    char run = chunk[0];
-
-    for(long i = 0; i < chunkBound; i++){
-        char cur = chunk[i];
-        if (cur == run)
-            my_count++;
-        else{
-            out[my_fill] = my_count;
-            out[my_fill + 1] = run;
-            my_fill += 2;
-            run = cur;
-            my_count = 1;
-        }
-    }
-    out[my_fill] = my_count;
-    out[my_fill + 1] = run;
-    out[my_fill + 2] = -1; 
-    munmap(chunk, chunkBound);
-    return out;
-}
-
-
+// Struct to hold information about zipped chunks
 typedef struct __dasein{
+    // Array of pointers to each zipped
     int **chunks;
+    // Bitmap, if ith entry is a 1, the ith entry in "chunks" is a valid zipped chunk
     int *valid;
     void *fp;
     long num_chunks;
 } dasein;
 
-//this seems highly redundant, why dont we just define a struct then malloc(sizeof(struct))?
+// Initialization for struct
 dasein *anxiety(int num_chunks){
     dasein *thing = malloc(sizeof(dasein));
     if(!thing){
-        fprintf(stderr, "MALLOC ERROR: death");
+        fprintf(stderr, "MALLOC ERROR: struct");
         return NULL;
     }
 
@@ -78,6 +49,37 @@ dasein *anxiety(int num_chunks){
     }
 
     return thing;
+}
+
+// Zips a chunk of size chunkBound
+int *pparse(char *chunk, int chunkBound){
+    // Malloc the worst case scenario
+    int *out = (int *) malloc((5 * chunkBound) + 1);
+    if(!out){
+       printf("Malloc error"); 
+    }
+    long my_count = 0;
+    long my_fill = 0;
+    char run = chunk[0];
+    // Find runs and put int-char pair into 'out' for each run 
+    for(long i = 0; i < chunkBound; i++){
+        char cur = chunk[i];
+        if (cur == run)
+            my_count++;
+        else{
+            out[my_fill] = my_count;
+            out[my_fill + 1] = run;
+            my_fill += 2;
+            run = cur;
+            my_count = 1;
+        }
+    }
+    out[my_fill] = my_count;
+    out[my_fill + 1] = run;
+    // Add a -1 at the end to signal end of zipped section to consumer
+    out[my_fill + 2] = -1; 
+    munmap(chunk, chunkBound);
+    return out;
 }
 
 
