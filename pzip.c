@@ -231,14 +231,14 @@ int main(int argc, char *argv[])
     }
     //loops over the rope waiting for all threads to finish before 
     //freeing data that threads may use and returning
-    for (int i = 0; i < iter; i++){
-        int ret = pthread_join(rope[i], NULL);
-	    if (ret){
-		    fprintf(stderr, "Failed to join with thread number %d\n", i);
-            fprintf(stderr, "Error code: %s\n", strerror(ret));
-		    break;
-	    }
-    }
+    // for (int i = 0; i < iter; i++){
+    //     int ret = pthread_join(rope[i], NULL);
+	//     if (ret){
+	// 	    fprintf(stderr, "Failed to join with thread number %d\n", i);
+    //         fprintf(stderr, "Error code: %s\n", strerror(ret));
+	// 	    break;
+	//     }
+    // }
     //free memory of the struct and the individually malloc'd fields
     free(chunkster->chunks);
     free(chunkster->valid);
