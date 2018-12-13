@@ -182,7 +182,6 @@ int main(int argc, char *argv[])
     long numproc = get_nprocs();
     FILE *fp = fopen(argv[1], "r");
     if(!fp){
-        fclose(fp);
         return 1;
     }
     // How long is the file?
