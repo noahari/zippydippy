@@ -1,6 +1,11 @@
 # zippydippy
 A phenomenology of Parallelized Serial Run-Length Encoding
 
+##IMPORTANT MAKEFILE CHANGE
+We use the math.h ceil function so in order for the makefile to work correctly we had to add -lm
+
+We have included a correct makefile in the repository
+
 ## How do we parallelize data?
 Get the number of processes on the computer and store it locally.
 
@@ -40,4 +45,10 @@ A struct containing:
 
 	An int of the total number of chunks in the file
 
-	An int to hold error codes
+	An int to hold chunk size
+
+	An int to hold which chunk is up for printing	
+
+	A mutex lock
+
+	A condition variable
